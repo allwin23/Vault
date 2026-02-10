@@ -1,0 +1,248 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    /* Prevent scroll on html */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    /* Prevent scroll on body */
+    @apply bg-[#f5f0e9] text-[#0a0a0a];
+
+    /* High contrast grid for debugging visibility key to VaultSim look */
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.08) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.08) 1.5px, transparent 1.5px);
+    background-size: 40px 40px;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Prevent scroll on root */
+    position: relative;
+  }
+}
+
+@layer utilities {
+  .h-safe-screen {
+    height: 100vh;
+    /* Fallback */
+    height: 100dvh;
+    /* Dynamic viewport height */
+  }
+
+  /* Scrollbar Utilities */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Animations */
+  .animate-spin-slow {
+    animation: spin-slow 12s linear infinite;
+  }
+
+  .animate-grow-line {
+    animation: growLine 1.2s ease forwards;
+  }
+
+  .animate-node {
+    animation: pulseNode 2s infinite;
+  }
+
+  .animate-float {
+    animation: floatIn 0.6s ease forwards;
+  }
+
+  .animate-morph {
+    animation: tokenMorph 0.8s ease forwards;
+  }
+
+  .animate-vault {
+    animation: vaultPulse 2.5s infinite;
+  }
+
+  .animate-pulse-line {
+    animation: pulseLine 1.4s linear infinite;
+  }
+
+  .animate-in {
+    animation: floatIn 0.5s ease-out forwards;
+  }
+
+  .zoom-in {
+    animation: zoom-in 0.5s ease-out forwards;
+  }
+
+  .fade-in-row>div {
+    animation: floatIn 0.6s ease-out forwards;
+  }
+}
+
+/* Global Scrollbar Theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f0e9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cfc8bd;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a093;
+}
+
+/* Keyframes */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes growLine {
+  from {
+    height: 0%;
+  }
+
+  to {
+    height: 100%;
+  }
+}
+
+@keyframes pulseNode {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes floatIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes tokenMorph {
+  0% {
+    opacity: 0.3;
+    filter: blur(3px);
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes vaultPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+  }
+
+  100% {
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+@keyframes pulseLine {
+  from {
+    stroke-dashoffset: 100;
+    opacity: 0.2;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.light-pillar-fallback {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #888;
+  font-size: 14px;
+}
+
+.light-pillar-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}

@@ -1,0 +1,29 @@
+# Dependencies
+# Never upload this; Vercel installs its own
+node_modules/
+.pnp
+.pnp.js
+
+# Production / Build
+# This is the compiled code; Vercel builds this from scratch
+dist/
+dist-ssr/
+*.local
+
+# Environment Variables
+# IMPORTANT: Keep your Railway API keys and secrets private
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor Folders
+.vscode/
+.idea/
+.DS_Store
