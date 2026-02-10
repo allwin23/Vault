@@ -59,6 +59,7 @@ export function TrialRoom({ onDebateStateChange }: TrialRoomProps) {
         if (isDebating) return;
         if (!session.id) {
             // Handle no session
+            return;
         }
 
         setIsDebating(true);
@@ -70,167 +71,71 @@ export function TrialRoom({ onDebateStateChange }: TrialRoomProps) {
         onDebateStateChange?.({ type: 'started' });
 
         const detokenizer = getDetokenizer();
-        let buffer = '';
 
         try {
             if (!session.id) {
                 throw new Error("No active session. Please start a session from the sidebar.");
             }
 
-            await getApiClient().runDebateStream(session.id, async (chunk) => {
-                buffer += chunk;
+            // Using standard legacy debate API (non-streaming)
+            const response = await getApiClient().runDebate(session.id);
+            const transcript = response.transcript;
+            const now = new Date();
 
-                // Simple streaming JSON parser: Look for complete objects inside the array
-                // We track matching braces to identify candidate objects
-                let depth = 0;
-                let startIndex = -1;
+            for (let i = 0; i < transcript.length; i++) {
+                const item = transcript[i];
+                const timestamp = new Date(now.getTime() + i * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
-                // We process the buffer from the last successfully processed point? 
-                // No, we process the whole buffer but consume it?
-                // Better: keep buffer as "unprocessed data".
+                let type: 'user' | 'system' | 'ai' = 'ai';
+                let title = 'AI Agent';
 
-                // Iterating through buffer to find complete JSON objects
-                for (let i = 0; i < buffer.length; i++) {
-                    if (buffer[i] === '{') {
-                        if (depth === 0) startIndex = i;
-                        depth++;
-                    } else if (buffer[i] === '}') {
-                        depth--;
-                        if (depth === 0 && startIndex !== -1) {
-                            // Candidate object found
-                            const candidate = buffer.substring(startIndex, i + 1);
-                            try {
-                                const item = JSON.parse(candidate);
+                if (item.agent === 'DefenseLawyer') { title = 'Defense Lawyer'; type = 'ai'; }
+                else if (item.agent === 'ProsecutionLawyer') { title = 'Prosecution Lawyer'; type = 'ai'; }
+                else if (item.agent === 'SYSTEM') { title = 'Vault System'; type = 'system'; }
+                else if (item.agent === 'User') { title = 'User Request'; type = 'user'; }
 
-                                // Validate it's a transcript item
-                                if (item.agent && item.text) {
-                                    // Process this item immediately
-                                    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-                                    // Determine meta
-                                    let type: 'user' | 'system' | 'ai' = 'ai';
-                                    let title = 'AI Agent';
-                                    if (item.agent === 'DefenseLawyer') { title = 'Defense Lawyer'; type = 'ai'; }
-                                    else if (item.agent === 'ProsecutionLawyer') { title = 'Prosecution Lawyer'; type = 'ai'; }
-                                    else if (item.agent === 'SYSTEM') { title = 'Vault System'; type = 'system'; }
-                                    else if (item.agent === 'User') { title = 'User Request'; type = 'user'; }
-
-                                    // Extract Verdict
-                                    if (item.text.startsWith('VERDICT:') || item.agent === 'Judge' || (title === 'AI Agent' && item.text.toLowerCase().includes('verdict'))) {
-                                        setVerdictText(item.text);
-                                        // Don't add to steps? User wanted it removed from timeline.
-                                        // So we consume it but don't add step.
-                                    } else {
-                                        // Detokenize async? We are in specific callback. 
-                                        // We can't await easily in this sync loop if we want to keep parsing.
-                                        // But we can fire and forget or just await since detokenizer is fast/local-ish?
-                                        // detokenizer.process is async. 
-
-                                        // We'll process valid items
-                                        const detokenized = await detokenizer.process(item.text);
-                                        const step: DebateStep = {
-                                            id: `step-${Date.now()}-${Math.random()}`,
-                                            timestamp,
-                                            title,
-                                            type,
-                                            agent: item.agent,
-                                            content: item.text,
-                                            outputTitle: 'Vault Detokenization',
-                                            outputContent: detokenized !== item.text ? detokenized : 'No PII tokens detected.',
-                                            outputStatus: item.agent === 'SYSTEM' ? 'secure' : (detokenized !== item.text ? 'warning' : 'processing')
-                                        };
-
-                                        setSteps(prev => {
-                                            // Avoid duplicates if parsing logic is weird, but clearing buffer prevents that
-                                            if (prev.some(s => s.content === step.content && s.agent === step.agent)) return prev;
-                                            return [...prev, step];
-                                        });
-                                    }
-                                }
-
-                                // Remove processed part from buffer to avoid re-parsing
-                                buffer = buffer.slice(i + 1);
-                                i = -1; // Reset loop to start of new buffer
-                                startIndex = -1;
-                            } catch (e) {
-                                // Not a valid JSON object yet, continue
-                            }
-                        }
+                // Check for verdict in text or from Judge agent
+                if (item.text.startsWith('VERDICT:') || item.agent === 'Judge' || title === 'AI Agent') {
+                    if (item.text.toLowerCase().includes('verdict')) {
+                        setVerdictText(item.text);
+                        // We continue to show it in transcript or skip? 
+                        // Previous logic continued loop but maybe didn't add step?
+                        // Fallback logic in file was: setVerdictText, then continue (skipping step add)
+                        continue;
                     }
                 }
-            });
+
+                // Process PII/Detokenization
+                const detokenized = await detokenizer.process(item.text);
+
+                const step: DebateStep = {
+                    id: `step-${i}-${Date.now()}`,
+                    timestamp,
+                    title,
+                    type,
+                    agent: item.agent,
+                    content: item.text,
+                    outputTitle: 'Vault Detokenization',
+                    outputContent: detokenized !== item.text ? detokenized : 'No PII tokens detected.',
+                    outputStatus: item.agent === 'SYSTEM' ? 'secure' : (detokenized !== item.text ? 'warning' : 'processing')
+                };
+
+                // Simulate typing delay
+                await new Promise(r => setTimeout(r, 800));
+                setSteps(prev => [...prev, step]);
+            }
 
             setIsDebating(false);
             setShowVerdictButton(true);
             onDebateStateChange?.({ type: 'completed' });
 
         } catch (error) {
-            console.error("Debate stream failed:", error);
+            console.error("Debate failed:", error);
 
-            // Fallback: Attempt legacy non-streaming debate if stream fails
-            let fallbackError: unknown;
-            try {
-                // If the error is NOT specifically about missing context, we try fallback.
-                // If it IS 'masked_content', legacy will likely fail too, but we can try or just skip.
-                // Let's try fallback to be safe, as it might handle headers/state differently.
-                console.log("Attempting legacy fallback...");
-                const response = await getApiClient().runDebate(session.id!);
-                const transcript = response.transcript;
-                const now = new Date();
-
-                for (let i = 0; i < transcript.length; i++) {
-                    const item = transcript[i];
-                    const timestamp = new Date(now.getTime() + i * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-                    let type: 'user' | 'system' | 'ai' = 'ai';
-                    let title = 'AI Agent';
-
-                    if (item.agent === 'DefenseLawyer') { title = 'Defense Lawyer'; type = 'ai'; }
-                    else if (item.agent === 'ProsecutionLawyer') { title = 'Prosecution Lawyer'; type = 'ai'; }
-                    else if (item.agent === 'SYSTEM') { title = 'Vault System'; type = 'system'; }
-                    else if (item.agent === 'User') { title = 'User Request'; type = 'user'; }
-
-                    if (item.text.startsWith('VERDICT:') || item.agent === 'Judge' || title === 'AI Agent') {
-                        if (item.text.toLowerCase().includes('verdict')) {
-                            setVerdictText(item.text);
-                            continue;
-                        }
-                    }
-
-                    const detokenized = await detokenizer.process(item.text);
-
-                    const step: DebateStep = {
-                        id: `step-${i}-${Date.now()}`,
-                        timestamp,
-                        title,
-                        type,
-                        agent: item.agent,
-                        content: item.text,
-                        outputTitle: 'Vault Detokenization',
-                        outputContent: detokenized !== item.text ? detokenized : 'No PII tokens detected.',
-                        outputStatus: item.agent === 'SYSTEM' ? 'secure' : (detokenized !== item.text ? 'warning' : 'processing')
-                    };
-
-                    await new Promise(r => setTimeout(r, 800));
-                    setSteps(prev => [...prev, step]);
-                }
-
-                setIsDebating(false);
-                setShowVerdictButton(true);
-                onDebateStateChange?.({ type: 'completed' });
-                return; // Exit successfully after fallback
-
-            } catch (e) {
-                fallbackError = e;
-                console.error("Fallback failed:", e);
-            }
-
-            // Enhanced Error Handling
-            const errorStr = String(error) + " " + String(typeof fallbackError !== 'undefined' ? fallbackError : '');
+            const errorStr = String(error);
             const isContextError = errorStr.includes("'masked_content'") || errorStr.includes("masked_content");
             const errorTitle = isContextError ? "Missing Context" : "System Error";
 
-            // Instruction for valid error
             const errorContent = isContextError
                 ? "No sanitized document found for this session. Please clear session/history and sanitize a document again."
                 : "Simulation interrupted. Please try re-running the debate or refreshing.";
