@@ -7,7 +7,7 @@ import { DebateLayout } from '../components/debate/DebateLayout';
 import { TimelineNode } from '../components/debate/TimelineNode';
 import { ConversationCard } from '../components/debate/ConversationCard';
 import { OutputPanel } from '../components/debate/OutputPanel';
-import { getApiClient } from '../utils/api';
+// import { getApiClient } from '../utils/api';
 import { getDetokenizer } from '../utils/detokenizer';
 import GradientText from '../components/GradientText';
 import { CheckCircle, Shield, ArrowRight } from 'lucide-react';
@@ -58,7 +58,7 @@ export function TrialRoom({ onDebateStateChange }: TrialRoomProps) {
     const runTrial = async () => {
         if (isDebating) return;
         if (!session.id) {
-            // Handle no session
+            console.error("No active session ID found.");
             return;
         }
 
@@ -77,13 +77,50 @@ export function TrialRoom({ onDebateStateChange }: TrialRoomProps) {
                 throw new Error("No active session. Please start a session from the sidebar.");
             }
 
-            // Using standard legacy debate API (non-streaming)
-            const response = await getApiClient().runDebate(session.id);
-            const transcript = response.transcript;
+            console.log(`Calling runDebate for session: ${session.id}`);
+
+            // Fetch raw response to handle potential stream formatting
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://geminihackathon26-production.up.railway.app/api'}/debate/run/${session.id}`, {
+                method: 'POST',
+                headers: { 'X-Session-ID': session.id }
+            });
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
+            // Using text() instead of json() allows us to handle both standard JSON arrays
+            // AND potentially concatenated JSON objects {}{} coming from a stream endpoint
+            const rawText = await response.text();
+            console.log("Raw API Response Length:", rawText.length);
+
+            let transcript: any[] = [];
+
+            try {
+                // Try standard JSON parse first (e.g. [{}, {}])
+                const json = JSON.parse(rawText);
+                if (json.transcript) transcript = json.transcript;
+                else if (Array.isArray(json)) transcript = json;
+            } catch (e) {
+                console.warn("Standard JSON parse failed, attempting stream/chunk parsing...");
+                // Fallback: Parse concatenated JSON objects {}{} using regex or simple split
+                const regex = /{[^}]+}/g;
+                const matches = rawText.match(regex);
+                if (matches) {
+                    transcript = matches.map(m => {
+                        try { return JSON.parse(m); } catch { return null; }
+                    }).filter(Boolean);
+                }
+            }
+
+            console.log("Parsed Transcript Items:", transcript.length);
+
             const now = new Date();
 
             for (let i = 0; i < transcript.length; i++) {
                 const item = transcript[i];
+                if (!item || !item.text) continue;
+
                 const timestamp = new Date(now.getTime() + i * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
                 let type: 'user' | 'system' | 'ai' = 'ai';
@@ -98,9 +135,6 @@ export function TrialRoom({ onDebateStateChange }: TrialRoomProps) {
                 if (item.text.startsWith('VERDICT:') || item.agent === 'Judge' || title === 'AI Agent') {
                     if (item.text.toLowerCase().includes('verdict')) {
                         setVerdictText(item.text);
-                        // We continue to show it in transcript or skip? 
-                        // Previous logic continued loop but maybe didn't add step?
-                        // Fallback logic in file was: setVerdictText, then continue (skipping step add)
                         continue;
                     }
                 }
